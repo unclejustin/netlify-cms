@@ -650,7 +650,7 @@ describe('Backend', () => {
     });
   });
 
-    describe('combineMultiContentEntries', () => {
+  describe('combineMultipleContentEntries', () => {
     const implementation = {
       init: jest.fn(() => implementation),
     };
@@ -659,12 +659,19 @@ describe('Backend', () => {
 
     it('should combine mutiple content same folder entries', () => {
       const entries = [
-        { path: 'posts/post.en.md', data: { title: 'Title en', content: 'Content en' } },
-        { path: 'posts/post.fr.md', data: { title: 'Title fr', content: 'Content fr' } },
+        {
+          path: 'posts/post.en.md',
+          data: { title: 'Title en', content: 'Content en' },
+          i18nStructure: 'locale_file_extensions',
+        },
+        {
+          path: 'posts/post.fr.md',
+          data: { title: 'Title fr', content: 'Content fr' },
+          i18nStructure: 'locale_file_extensions',
+        },
       ];
-      const collection = fromJS({ multi_content: 'same_folder' });
 
-      expect(backend.combineMultiContentEntries(entries, collection)).toEqual([
+      expect(backend.combineMultipleContentEntries(entries)).toEqual([
         {
           path: 'posts/post.md',
           raw: '',
@@ -678,12 +685,22 @@ describe('Backend', () => {
 
     it('should combine mutiple content different folder entries', () => {
       const entries = [
-        { path: 'posts/en/post.md', data: { title: 'Title en', content: 'Content en' } },
-        { path: 'posts/fr/post.md', data: { title: 'Title fr', content: 'Content fr' } },
+        {
+          path: 'posts/en/post.md',
+          data: { title: 'Title en', content: 'Content en' },
+          i18nStructure: 'locale_folders',
+          slugWithLocale: 'en/post.md',
+        },
+        {
+          path: 'posts/fr/post.md',
+          data: { title: 'Title fr', content: 'Content fr' },
+          i18nStructure: 'locale_folders',
+          slugWithLocale: 'fr/post.md',
+        },
       ];
       const collection = fromJS({ multi_content: 'diff_folder' });
 
-      expect(backend.combineMultiContentEntries(entries, collection)).toEqual([
+      expect(backend.combineMultipleContentEntries(entries, collection)).toEqual([
         {
           path: 'posts/post.md',
           raw: '',
@@ -713,7 +730,7 @@ describe('Backend', () => {
           data: { title: 'Title fr', content: 'Content fr' },
         },
       ];
-      const collection = fromJS({ multi_content: 'same_folder' });
+      const collection = fromJS({ i18n_structure: 'locale_file_extensions' });
 
       backend.listAllEntries = jest.fn().mockResolvedValue(entries);
 
@@ -727,7 +744,6 @@ describe('Backend', () => {
               en: { title: 'Title en', content: 'Content en' },
               fr: { title: 'Title fr', content: 'Content fr' },
             },
-            multiContentKey: 'posts/post',
           },
         ],
       });
@@ -746,7 +762,7 @@ describe('Backend', () => {
           data: { title: 'Title fr', content: 'Content fr' },
         },
       ];
-      const collection = fromJS({ multi_content: 'diff_folder' });
+      const collection = fromJS({ i18n_structure: 'locale_folders' });
 
       backend.listAllEntries = jest.fn().mockResolvedValue(entries);
 
@@ -760,7 +776,6 @@ describe('Backend', () => {
               en: { title: 'Title en', content: 'Content en' },
               fr: { title: 'Title fr', content: 'Content fr' },
             },
-            multiContentKey: 'posts/post.md',
           },
         ],
       });

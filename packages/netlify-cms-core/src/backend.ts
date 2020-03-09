@@ -1,4 +1,4 @@
-import { attempt, flatten, isError, uniq, trim, sortBy, groupBy, omit } from 'lodash';
+import { attempt, flatten, isError, uniq, trim, sortBy, groupBy, omit, difference } from 'lodash';
 import { List, Map, fromJS } from 'immutable';
 import * as fuzzy from 'fuzzy';
 import { resolveFormat } from './formats/formats';
@@ -53,9 +53,17 @@ import {
 } from './types/redux';
 import AssetProxy from './valueObjects/AssetProxy';
 import { FOLDER, FILES } from './constants/collectionTypes';
+<<<<<<< HEAD
 import { selectCustomPath } from './reducers/entryDraft';
 import { UnpublishedEntry } from 'netlify-cms-lib-util/src/implementation';
 import { SAME_FOLDER, DIFF_FOLDER, DIFF_FILE_TYPES } from 'Constants/multiContentTypes';
+=======
+import {
+  LOCALE_FILE_EXTENSIONS,
+  LOCALE_FOLDERS,
+  DIFF_FILE_TYPES,
+} from 'Constants/multiContentTypes';
+>>>>>>> 99de665d... fix: feedback changes
 
 const { extractTemplateVars, dateParsers } = stringTemplate;
 
@@ -439,11 +447,11 @@ export class Backend {
   }
 
   async listAllMultipleEntires(collection: Collection, page: number, locales: string[]) {
-    const multiContent = collection.get('multi_content');
-    const depth = multiContent === DIFF_FOLDER ? 2 : 0;
+    const i18nStructure = collection.get('i18n_structure');
+    const depth = i18nStructure === LOCALE_FOLDERS ? 2 : '';
     const entries = await this.listAllEntries(collection, depth);
     let multiEntries;
-    if (multiContent === SAME_FOLDER) {
+    if (i18nStructure === LOCALE_FILE_EXTENSIONS) {
       multiEntries = entries
         .filter(entry => locales.some(l => entry.slug.endsWith(`.${l}`)))
         .map(entry => {
@@ -452,23 +460,26 @@ export class Backend {
           return {
             ...entry,
             slug: entry.slug.replace(`.${locale}`, ''),
-            multiContentKey: path.join('.'),
+            contentKey: path.join('.'),
+            i18nStructure,
+            slugWithLocale: entry.slug,
           };
         });
-    } else if (multiContent === DIFF_FOLDER) {
+    } else if (i18nStructure === LOCALE_FOLDERS) {
       multiEntries = entries
         .filter(entry => locales.some(l => entry.slug.startsWith(`${l}/`)))
         .map(entry => {
-          const path = entry.path.split('/');
-          const locale = path.splice(-2, 1)[0];
+          const locale = entry.slug.slice(0, 2);
           return {
             ...entry,
             slug: entry.slug.replace(`${locale}/`, ''),
-            multiContentKey: path.join('/'),
+            contentKey: entry.path.replace(`${locale}/`, ''),
+            i18nStructure,
+            slugWithLocale: entry.slug,
           };
         });
     }
-    return { entries: this.combineMultiContentEntries(multiEntries, collection) };
+    return { entries: this.combineMultipleContentEntries(multiEntries, collection) };
   }
 
   async search(collections: Collection[], searchTerm: string) {
@@ -639,11 +650,12 @@ export class Backend {
     const extension = selectFolderEntryExtension(collection);
     const integration = selectIntegration(state.integrations, null, 'assetStore');
     const multiContent = collection.get('multi_content');
+    const i18nStructure = collection.get('i18n_structure');
     const locales = state.config.get('locales');
     let loadedEntries;
     let mediaFiles;
 
-    if (locales && multiContent === SAME_FOLDER) {
+    if (multiContent && i18nStructure === LOCALE_FILE_EXTENSIONS) {
       loadedEntries = await Promise.all(
         locales.map(l =>
           this.implementation
@@ -651,7 +663,7 @@ export class Backend {
             .catch(() => undefined),
         ),
       );
-    } else if (locales && multiContent === DIFF_FOLDER) {
+    } else if (multiContent && i18nStructure === LOCALE_FOLDERS) {
       loadedEntries = await Promise.all(
         locales.map(l =>
           this.implementation
@@ -669,22 +681,40 @@ export class Backend {
         let entry = createEntry(collection.get('name'), slug, loadedEntry.file.path, {
           raw: loadedEntry.data,
           label,
+          i18nStructure,
           mediaFiles: [],
           meta: { path: prepareMetaPath(loadedEntry.file.path, collection) },
         });
 
+<<<<<<< HEAD
         entry = this.entryWithFormat(collection)(entry);
         entry = await this.processEntry(state, collection, entry);
+=======
+        const entryWithFormat = this.entryWithFormat(collection)(entry);
+        if (!mediaFiles) {
+          const mediaFolders = selectMediaFolders(state, collection, fromJS(entryWithFormat));
+          if (mediaFolders.length > 0 && !integration) {
+            mediaFiles = [];
+            for (const folder of mediaFolders) {
+              mediaFiles = [...entry.mediaFiles, ...(await this.implementation.getMedia(folder))];
+            }
+          } else {
+            mediaFiles = state.mediaLibrary.get('files') || [];
+          }
+        }
+        entry.mediaFiles = mediaFiles;
+        entry.slugWithLocale = selectEntrySlug(collection, entry.path);
+>>>>>>> 99de665d... fix: feedback changes
 
         return entry;
       }),
     );
 
-    if (entries.length === 1) {
-      return entries[0];
+    if (multiContent && DIFF_FILE_TYPES.includes(i18nStructure)) {
+      return this.combineEntries(entries);
     }
 
-    return this.combineEntries(entries, multiContent);
+    return entries[0];
   }
 
   getMedia() {
@@ -833,32 +863,32 @@ export class Backend {
     return entry;
   }
 
-  combineMultiContentEntries(entries: entryMap[], collection: Collection) {
-    const groupEntries = groupBy(entries, 'multiContentKey');
+  combineMultipleContentEntries(entries: entryMap[]) {
+    const groupEntries = groupBy(entries, 'contentKey');
     return Object.keys(groupEntries).reduce((acc, key) => {
       const entries = groupEntries[key];
-      const multiContent =
-        entries[0].multiContent || (collection && collection.get('multi_content'));
-      return [...acc, this.combineEntries(entries, multiContent)];
+      return [...acc, this.combineEntries(entries)];
     }, []);
   }
 
-  combineEntries(entries: entryMap[], multiContent: string) {
+  combineEntries(entries: entryMap[]) {
+    const { i18nStructure, contentKey, slugWithLocale, ...entry } = entries[0];
     const data = {};
     let splitChar;
     let path;
-    if (multiContent === SAME_FOLDER) {
-      splitChar = '.';
-    } else if (multiContent === DIFF_FOLDER) {
-      splitChar = '/';
-    }
     entries.forEach(e => {
-      const entryPath = e.path.split(splitChar);
-      const locale = entryPath.splice(-2, 1)[0];
-      !path && (path = entryPath.join(splitChar));
-      data[locale] = e.data;
+      if (i18nStructure === LOCALE_FILE_EXTENSIONS) {
+        const entryPath = e.path.split('.');
+        const locale = entryPath.splice(-2, 1)[0];
+        !path && (path = entryPath.join('.'));
+        data[locale] = e.data;
+      } else if (i18nStructure === LOCALE_FOLDERS) {
+        const locale = e.slugWithLocale.slice(0, 2);
+        !path && (path = e.path.replace(`${locale}/`, ''));
+        data[locale] = e.data;
+      }
     });
-    return { ...entries[0], path, raw: '', data };
+    return { ...entry, path, raw: '', data };
   }
 
   /**
@@ -949,7 +979,7 @@ export class Backend {
 
     const newEntry = entryDraft.getIn(['entry', 'newRecord']) || false;
     const MultiContentDiffFiles =
-      DIFF_FILE_TYPES.includes(collection.get('multi_content')) && config.get('locales');
+      DIFF_FILE_TYPES.includes(collection.get('i18n_structure')) && collection.get('multi_content');
 
     const useWorkflow = selectUseWorkflow(config);
 
@@ -1005,12 +1035,12 @@ export class Backend {
 
     let entriesObj = [entryObj];
     if (MultiContentDiffFiles) {
-      const multiContent = collection.get('multi_content');
+      const i18nStructure = collection.get('i18n_structure');
       const extension = selectFolderEntryExtension(collection);
       const data = entryDraft.getIn(['entry', 'data']).toJS();
       const locales = Object.keys(data);
       entriesObj = [];
-      if (multiContent === SAME_FOLDER) {
+      if (i18nStructure === LOCALE_FILE_EXTENSIONS) {
         locales.forEach(l => {
           entriesObj.push({
             path: entryObj.path.replace(extension, `${l}.${extension}`),
@@ -1021,7 +1051,7 @@ export class Backend {
             ),
           });
         });
-      } else if (multiContent === DIFF_FOLDER) {
+      } else if (i18nStructure === LOCALE_FOLDERS) {
         locales.forEach(l => {
           entriesObj.push({
             path: entryObj.path.replace(`${entryObj.slug}`, `${l}/${entryObj.slug}`),
@@ -1126,7 +1156,7 @@ export class Backend {
     const path = selectEntryPath(collection, slug) as string;
     const extension = selectFolderEntryExtension(collection) as string;
     const MultiContentDiffFiles =
-      DIFF_FILE_TYPES.includes(collection.get('multi_content')) && config.get('locales');
+      DIFF_FILE_TYPES.includes(collection.get('i18n_structure')) && collection.get('multi_content');
     const locales = config.get('locales');
 
     if (!selectAllowDeletion(collection)) {
@@ -1150,14 +1180,14 @@ export class Backend {
     const entry = selectEntry(state.entries, collection.get('name'), slug);
     await this.invokePreUnpublishEvent(entry);
     if (MultiContentDiffFiles) {
-      const multiContent = collection.get('multi_content');
-      if (multiContent === SAME_FOLDER) {
+      const i18nStructure = collection.get('i18n_structure');
+      if (i18nStructure === LOCALE_FILE_EXTENSIONS) {
         for (const l of locales) {
           await this.implementation
             .deleteFile(path.replace(extension, `${l}.${extension}`), commitMessage)
             .catch(() => undefined);
         }
-      } else if (multiContent === DIFF_FOLDER) {
+      } else if (i18nStructure === LOCALE_FOLDERS) {
         for (const l of locales) {
           await this.implementation
             .deleteFile(path.replace(`${slug}`, `${l}/${slug}`), commitMessage)

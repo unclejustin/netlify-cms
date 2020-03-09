@@ -1,16 +1,14 @@
 import AJV from 'ajv';
 import { select, uniqueItemProperties } from 'ajv-keywords/keywords';
 import ajvErrors from 'ajv-errors';
-import locale from 'locale-codes';
-import { uniq } from 'lodash';
 import { formatExtensions, frontmatterFormats, extensionFormatters } from 'Formats/formats';
 import { getWidgets } from 'Lib/registry';
-import { SINGLE_FILE, SAME_FOLDER, DIFF_FOLDER } from 'Constants/multiContentTypes';
-
-/**
- * valid locales.
- */
-const locales = uniq(locale.all.map(l => l['iso639-1']).filter(Boolean));
+import {
+  locales,
+  SINGLE_FILE,
+  LOCALE_FILE_EXTENSIONS,
+  LOCALE_FOLDERS,
+} from 'Constants/multiContentTypes';
 
 /**
  * Config for fields in both file and folder collections.
@@ -134,6 +132,7 @@ const getConfigSchema = () => ({
       type: 'array',
       minItems: 2,
       items: { type: 'string', enum: locales },
+      uniqueItems: true,
     },
     collections: {
       type: 'array',
@@ -189,7 +188,6 @@ const getConfigSchema = () => ({
               type: 'string',
             },
           },
-<<<<<<< HEAD
           fields: fieldsConfig(),
           sortableFields: {
             type: 'array',
@@ -222,20 +220,29 @@ const getConfigSchema = () => ({
             additionalProperties: false,
             minProperties: 1,
           },
-          multi_content: { type: 'string', enum: [SINGLE_FILE, SAME_FOLDER, DIFF_FOLDER] },
+          i18n_structure: {
+            type: 'string',
+            enum: [SINGLE_FILE, LOCALE_FILE_EXTENSIONS, LOCALE_FOLDERS],
+          },
+          default_locale: { type: 'string', enum: locales },
         },
         required: ['name', 'label'],
         oneOf: [{ required: ['files'] }, { required: ['folder', 'fields'] }],
-        if: { required: ['extension'] },
-        then: {
-          // Cannot infer format from extension.
-          if: {
-            properties: {
-              extension: { enum: Object.keys(extensionFormatters) },
+        allOf: [
+          {
+            if: { required: ['extension'] },
+            then: {
+              // Cannot infer format from extension.
+              if: {
+                properties: {
+                  extension: { enum: Object.keys(extensionFormatters) },
+                },
+              },
+              else: { required: ['format'] },
             },
           },
-          else: { required: ['format'] },
-        },
+          { if: { required: ['files'] }, then: { not: { required: ['i18n_structure'] } } },
+        ],
         dependencies: {
           frontmatter_delimiter: {
             properties: {
