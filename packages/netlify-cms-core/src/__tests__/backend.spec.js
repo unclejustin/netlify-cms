@@ -715,7 +715,6 @@ describe('Backend', () => {
 
   describe('listAllMultipleEntires', () => {
     const backend = new Backend(implementation, { config, backendName: 'github' });
-    const locales = fromJS(['en', 'fr']);
 
     it('should combine mutiple content same folder entries', async () => {
       const entries = [
@@ -730,11 +729,14 @@ describe('Backend', () => {
           data: { title: 'Title fr', content: 'Content fr' },
         },
       ];
-      const collection = fromJS({ i18n_structure: 'locale_file_extensions' });
+      const collection = fromJS({
+        i18n_structure: 'locale_file_extensions',
+        locales: ['en', 'fr'],
+      });
 
       backend.listAllEntries = jest.fn().mockResolvedValue(entries);
 
-      await expect(backend.listAllMultipleEntires(collection, '', locales)).resolves.toEqual({
+      await expect(backend.listAllMultipleEntires(collection)).resolves.toEqual({
         entries: [
           {
             slug: 'post',
@@ -762,11 +764,11 @@ describe('Backend', () => {
           data: { title: 'Title fr', content: 'Content fr' },
         },
       ];
-      const collection = fromJS({ i18n_structure: 'locale_folders' });
+      const collection = fromJS({ i18n_structure: 'locale_folders', locales: ['en', 'fr'] });
 
       backend.listAllEntries = jest.fn().mockResolvedValue(entries);
 
-      await expect(backend.listAllMultipleEntires(collection, '', locales)).resolves.toEqual({
+      await expect(backend.listAllMultipleEntires(collection)).resolves.toEqual({
         entries: [
           {
             slug: 'post',
