@@ -26,6 +26,7 @@ const fieldsConfig = () => ({
       label: { type: 'string' },
       widget: { type: 'string' },
       required: { type: 'boolean' },
+      translatable: { type: 'boolean' },
       hint: { type: 'string' },
       pattern: { type: 'array', minItems: 2, items: { type: 'string' } },
       field: { $ref: 'field' },
