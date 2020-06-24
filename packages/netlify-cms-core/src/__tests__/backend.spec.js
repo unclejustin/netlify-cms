@@ -790,7 +790,7 @@ describe('Backend', () => {
           },
         ],
       });
-	});
+    });
   });
 
   describe('getMultipleEntries', () => {
