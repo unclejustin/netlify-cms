@@ -368,7 +368,7 @@ export class Backend {
     return filteredEntries;
   }
 
-  async listEntries(collection: Collection, depth: number) {
+  async listEntries(collection: Collection, depth: number | null = null) {
     const extension = selectFolderEntryExtension(collection);
     let listMethod: () => Promise<ImplementationEntry[]>;
     const collectionType = collection.get('type');
@@ -899,11 +899,11 @@ export class Backend {
     let locale;
     entries.forEach((e: EntryValue) => {
       if (i18nStructure === LOCALE_FILE_EXTENSIONS) {
-        locale = e?.slugWithLocale?.slice(-2) as string;
+        locale = e!.slugWithLocale!.slice(-2) as string;
         !path && (path = e.path.replace(`.${locale}`, ''));
         data[locale] = e.data;
       } else if (i18nStructure === LOCALE_FOLDERS) {
-        locale = e?.slugWithLocale?.slice(0, 2) as string;
+        locale = e!.slugWithLocale!.slice(0, 2) as string;
         !path && (path = e.path.replace(`${locale}/`, ''));
         data[locale] = e.data;
       }
@@ -1095,7 +1095,7 @@ export class Backend {
     const i18nStructure = collection.get('i18n_structure');
     const extension = selectFolderEntryExtension(collection);
     const data = entryDraft.getIn(['entry', 'data']).toJS();
-    const locales = Object.keys(data);
+    const locales = uniq([collection.get('default_locale'), ...Object.keys(data)]);
     const entriesObj: EntryObj[] = [];
     if (i18nStructure === LOCALE_FILE_EXTENSIONS) {
       locales.forEach(l => {
@@ -1104,8 +1104,11 @@ export class Backend {
           slug: entryObj.slug,
           raw: this.entryToRaw(
             collection,
-            entryDraft.get('entry').set('data', entryDraft.getIn(['entry', 'data', l])),
+            entryDraft.get('entry').set('data', entryDraft.getIn(['entry', 'data', l!])),
           ),
+          ...(entryObj.newPath && {
+            newPath: entryObj.newPath,
+          }),
         });
       });
     } else if (i18nStructure === LOCALE_FOLDERS) {
@@ -1115,8 +1118,11 @@ export class Backend {
           slug: entryObj.slug,
           raw: this.entryToRaw(
             collection,
-            entryDraft.get('entry').set('data', entryDraft.getIn(['entry', 'data', l])),
+            entryDraft.get('entry').set('data', entryDraft.getIn(['entry', 'data', l!])),
           ),
+          ...(entryObj.newPath && {
+            newPath: entryObj.newPath,
+          }),
         });
       });
     }
